@@ -99,6 +99,32 @@
   }
   .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
+  .center-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 20px;
+  }
+  .center-tab {
+    padding: 10px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s ease;
+  }
+  .center-tab:hover { background: #f3f4f6; color: #111827; }
+  .center-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, .25);
+  }
+
   .section-title {
     font-size: 12px;
     text-transform: uppercase;
@@ -285,7 +311,6 @@
     <h1>🏥 Gestion des stocks</h1>
     <div class="sub">MB — Centres esthétiques</div>
   </div>
-  <select id="centerSelect"></select>
   <input type="text" id="searchInput" placeholder="🔍 Rechercher client, thérapeute…" style="min-width:240px" />
   <div class="spacer"></div>
   <span id="syncStatus" class="sub"><span class="status-dot offline"></span>Local</span>
@@ -295,9 +320,12 @@
 </header>
 
 <main>
+  <div class="center-tabs" id="centerTabs"></div>
   <div class="tabs" id="mainTabs">
     <button class="tab active" data-tab="stock">📦 Stock</button>
     <button class="tab" data-tab="mesojet">💉 Mésojet</button>
+    <button class="tab" data-tab="kos" data-exclusive="LE GRAU DU ROI">🌿 KOS</button>
+    <button class="tab" data-tab="advance" data-exclusive="LE GRAU DU ROI">✨ Advance Beauty</button>
     <button class="tab" data-tab="history">📋 Historique</button>
   </div>
 
@@ -307,6 +335,16 @@
     <div class="grid" id="gridTenues"></div>
     <div class="section-title">Produits</div>
     <div class="grid" id="gridProduits"></div>
+  </div>
+
+  <!-- KOS TAB -->
+  <div id="tab-kos" style="display:none">
+    <div class="grid" id="gridKos"></div>
+  </div>
+
+  <!-- ADVANCE BEAUTY TAB -->
+  <div id="tab-advance" style="display:none">
+    <div class="grid" id="gridAdvance"></div>
   </div>
 
   <!-- MESOJET TAB -->
@@ -425,6 +463,61 @@ const PRODUITS = [
   { id: 'livre', name: 'LIVRE' },
 ];
 
+// Catégories exclusives au Grau du Roi
+const KOS = [
+  { id: 'kos-baume-abricot',         name: 'Baume à lèvres - Abricot 10ml' },
+  { id: 'kos-baume-cerise',          name: 'Baume à lèvres - Cerise 10ml' },
+  { id: 'kos-baume-vanille',         name: 'Baume à lèvres - Vanille 10ml' },
+  { id: 'kos-beurre-babassu',        name: 'Beurre de Babassu 100ml' },
+  { id: 'kos-contour-yeux',          name: 'Contour des yeux - Soin ultra concentré 15ml' },
+  { id: 'kos-creme-legendes',        name: 'Crème des légendes 50ml' },
+  { id: 'kos-creme-camomille',       name: 'Crème douce à la camomille 50ml' },
+  { id: 'kos-creme-3thes',           name: 'Crème fine aux 3 thés - Corps 200ml' },
+  { id: 'kos-creme-lotus-1',         name: 'Crème matte au lotus sacré 50ml (1)' },
+  { id: 'kos-creme-lotus-2',         name: 'Crème matte au lotus sacré 50ml (2)' },
+  { id: 'kos-gelee-lotus',           name: 'Gelée nettoyante au lotus sacré 100ml' },
+  { id: 'kos-gommage-sel',           name: 'Gommage aux Cristaux de sel 200ml' },
+  { id: 'kos-gommage-sels-marins',   name: 'Gommage aux cristaux de sels marins 200ml' },
+  { id: 'kos-gommage-sucres',        name: 'Gommage aux sucres mauriciens 200ml' },
+  { id: 'kos-gommage-camomille',     name: 'Gommage doux à la camomille' },
+  { id: 'kos-gommage-eclat',         name: 'Gommage éclat' },
+  { id: 'kos-huile-argan',           name: 'Huile de beauté - Argan Fleurs des Îles 100ml' },
+  { id: 'kos-huile-aube',            name: "Huile de beauté - Jardin de l'aube 100ml" },
+  { id: 'kos-huile-soleils',         name: 'Huile de beauté - Jardin des soleils 100ml' },
+  { id: 'kos-huile-songes',          name: 'Huile de beauté - Jardin des songes 100ml' },
+  { id: 'kos-huile-demaquillante',   name: 'Huile démaquillante 200ml' },
+  { id: 'kos-huile-future-maman',    name: 'Huile pour future maman - Perle de bien-être 100ml' },
+  { id: 'kos-masque-hydrogel-yeux',  name: "Masque hydrogel yeux à l'eau d'orge bio" },
+  { id: 'kos-masque-legend',         name: 'Masque Légend' },
+  { id: 'kos-patch-contour-yeux',    name: 'Patch contour des yeux 1 dose' },
+  { id: 'kos-serum-camomille',       name: 'Sérum à la camomille 15ml' },
+  { id: 'kos-serum-buste',           name: 'Sérum buste - Soin des légendes 30ml' },
+  { id: 'kos-serum-jeunesse',        name: 'Sérum jeunesse - Elixir des légendes 15ml' },
+];
+
+const ADVANCE_BEAUTY = [
+  { id: 'ab-liftin-3d',       name: "Lift'in 3D" },
+  { id: 'ab-peelin-3d',       name: "Peel'in 3D" },
+  { id: 'ab-lotion-peeling',  name: 'Lotion Peeling' },
+  { id: 'ab-gel-collagene',   name: 'Gel collagène 125ml' },
+  { id: 'ab-creme-lift',      name: 'Crème Lift sérum 30ml' },
+  { id: 'ab-creme-restruct',  name: 'Crème Restructuring 30ml' },
+  { id: 'ab-creme-acnolyse',  name: 'Crème Acno-lyse 30ml' },
+  { id: 'ab-gel-dermalyse',   name: 'Gel Derma-lyse 200ml' },
+];
+
+// Associe chaque catégorie exclusive aux centres autorisés
+const EXCLUSIVE_CATEGORIES = [
+  { title: 'KOS',            items: KOS,            centers: ['LE GRAU DU ROI'] },
+  { title: 'Advance Beauty', items: ADVANCE_BEAUTY, centers: ['LE GRAU DU ROI'] },
+];
+function categoriesForCenter(c) {
+  return EXCLUSIVE_CATEGORIES.filter(cat => cat.centers.includes(c));
+}
+function allProductsForCenter(c) {
+  return [...TENUES, ...PRODUITS, ...categoriesForCenter(c).flatMap(cat => cat.items)];
+}
+
 const MESOJET_STRUCTURE = [
   { cat: 'PEELINGS', items: [
     { id: 'peel-rc1', name: 'Renewal Complex 1 - Glycolic 5%' },
@@ -512,7 +605,12 @@ function initializeMissingData() {
     if (!state.data[c]) state.data[c] = { products: {}, mesojet: {} };
     if (!state.data[c].products) state.data[c].products = {};
     if (!state.data[c].mesojet) state.data[c].mesojet = {};
-    for (const p of [...TENUES, ...PRODUITS]) {
+    const productsForCenter = [
+      ...TENUES,
+      ...PRODUITS,
+      ...categoriesForCenter(c).flatMap(cat => cat.items),
+    ];
+    for (const p of productsForCenter) {
       if (!state.data[c].products[p.id]) {
         state.data[c].products[p.id] = {
           stockInitial: INITIAL_STOCKS[c]?.[p.id] ?? 0,
@@ -601,21 +699,57 @@ function render() {
   renderCenterSelect();
   renderStockTab();
   renderMesojetTab();
+  renderKosTab();
+  renderAdvanceTab();
   renderHistoryTab();
+  updateExclusiveTabsVisibility();
 }
 
 function renderCenterSelect() {
-  const sel = document.getElementById('centerSelect');
-  if (!sel.options.length) {
-    sel.innerHTML = CENTERS.map(c => `<option value="${c}">${c}</option>`).join('');
-    sel.value = state.currentCenter;
-  }
+  const container = document.getElementById('centerTabs');
+  container.innerHTML = CENTERS.map(c =>
+    `<button class="center-tab${c === state.currentCenter ? ' active' : ''}" data-center="${c}">${c}</button>`
+  ).join('');
 }
 
 function renderStockTab() {
   const c = state.currentCenter;
   document.getElementById('gridTenues').innerHTML = TENUES.map(p => cardHTML(c, p, 'stock')).join('');
   document.getElementById('gridProduits').innerHTML = PRODUITS.map(p => cardHTML(c, p, 'stock')).join('');
+}
+
+function renderKosTab() {
+  const c = state.currentCenter;
+  const grid = document.getElementById('gridKos');
+  const hasCategory = categoriesForCenter(c).some(cat => cat.title === 'KOS');
+  grid.innerHTML = hasCategory ? KOS.map(p => cardHTML(c, p, 'stock')).join('') : '';
+}
+
+function renderAdvanceTab() {
+  const c = state.currentCenter;
+  const grid = document.getElementById('gridAdvance');
+  const hasCategory = categoriesForCenter(c).some(cat => cat.title === 'Advance Beauty');
+  grid.innerHTML = hasCategory ? ADVANCE_BEAUTY.map(p => cardHTML(c, p, 'stock')).join('') : '';
+}
+
+function updateExclusiveTabsVisibility() {
+  const c = state.currentCenter;
+  document.querySelectorAll('#mainTabs .tab[data-exclusive]').forEach(btn => {
+    const allowed = btn.dataset.exclusive === c;
+    btn.style.display = allowed ? '' : 'none';
+    // Si on quitte un centre qui avait l'onglet actif, retomber sur Stock
+    if (!allowed && state.currentTab === btn.dataset.tab) {
+      state.currentTab = 'stock';
+    }
+  });
+  // Synchronise les classes actives et l'affichage des panneaux
+  document.querySelectorAll('#mainTabs .tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === state.currentTab)
+  );
+  ['stock','mesojet','kos','advance','history'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = (t === state.currentTab) ? '' : 'none';
+  });
 }
 
 function cardHTML(center, p, type) {
@@ -688,7 +822,7 @@ window.updateMesojetSeuil = function(id, val) {
 function renderHistoryTab() {
   const c = state.currentCenter;
   const tbl = document.getElementById('historyTable');
-  const allProducts = [...TENUES, ...PRODUITS];
+  const allProducts = allProductsForCenter(c);
   const search = state.search.toLowerCase();
 
   if (state.currentHistTab === 'sorties') {
@@ -750,7 +884,7 @@ function formatDate(d) {
 // PRODUCT MODAL
 // ============================================================
 window.openProduct = function(id, type) {
-  const p = [...TENUES, ...PRODUITS].find(x => x.id === id);
+  const p = allProductsForCenter(state.currentCenter).find(x => x.id === id);
   if (!p) return;
   state.currentProduct = { ...p, type };
   const c = state.currentCenter;
@@ -915,8 +1049,10 @@ document.getElementById('reapproForm').addEventListener('submit', (e) => {
 // ============================================================
 // TABS / NAV
 // ============================================================
-document.getElementById('centerSelect').addEventListener('change', (e) => {
-  state.currentCenter = e.target.value;
+document.getElementById('centerTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.center-tab');
+  if (!btn) return;
+  state.currentCenter = btn.dataset.center;
   render();
 });
 
@@ -925,16 +1061,11 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
   if (state.currentTab === 'history') renderHistoryTab();
 });
 
-document.querySelectorAll('#mainTabs .tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#mainTabs .tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.currentTab = btn.dataset.tab;
-    document.getElementById('tab-stock').style.display = state.currentTab === 'stock' ? '' : 'none';
-    document.getElementById('tab-mesojet').style.display = state.currentTab === 'mesojet' ? '' : 'none';
-    document.getElementById('tab-history').style.display = state.currentTab === 'history' ? '' : 'none';
-    render();
-  });
+document.getElementById('mainTabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab');
+  if (!btn) return;
+  state.currentTab = btn.dataset.tab;
+  render();
 });
 
 document.querySelectorAll('[data-histtab]').forEach(btn => {
@@ -980,7 +1111,7 @@ window.exportExcel = function() {
   const wb = XLSX.utils.book_new();
   // Summary sheet
   const summary = [['Produit', 'Stock initial', 'Réappros', 'Sorties', 'Stock restant', 'Seuil']];
-  for (const p of [...TENUES, ...PRODUITS]) {
+  for (const p of allProductsForCenter(c)) {
     const prod = state.data[c].products[p.id];
     const rea = prod.reappros.reduce((s,r) => s+(+r.quantite||0), 0);
     const sor = prod.sorties.reduce((s,r) => s+(+r.quantite||0), 0);
@@ -989,7 +1120,7 @@ window.exportExcel = function() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Récap');
   // Sorties sheet
   const sortiesData = [['Produit', 'Date', 'Client', 'Quantité', 'Thérapeute']];
-  for (const p of [...TENUES, ...PRODUITS]) {
+  for (const p of allProductsForCenter(c)) {
     for (const s of state.data[c].products[p.id].sorties) {
       sortiesData.push([p.name, s.date, s.client, s.quantite, s.therapeute]);
     }
@@ -997,7 +1128,7 @@ window.exportExcel = function() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sortiesData), 'Sorties');
   // Réappros
   const reData = [['Produit', 'Date', 'Quantité', 'Thérapeute']];
-  for (const p of [...TENUES, ...PRODUITS]) {
+  for (const p of allProductsForCenter(c)) {
     for (const r of state.data[c].products[p.id].reappros) {
       reData.push([p.name, r.date, r.quantite, r.therapeute]);
     }
@@ -1027,7 +1158,7 @@ window.exportPDF = function() {
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, 14, 25);
 
   const body = [];
-  for (const p of [...TENUES, ...PRODUITS]) {
+  for (const p of allProductsForCenter(c)) {
     const prod = state.data[c].products[p.id];
     const rea = prod.reappros.reduce((s,r) => s+(+r.quantite||0), 0);
     const sor = prod.sorties.reduce((s,r) => s+(+r.quantite||0), 0);
