@@ -388,26 +388,8 @@
       <button class="close-btn" onclick="document.getElementById('settingsModal').classList.remove('show')">×</button>
     </div>
     <div class="modal-body">
-      <p>Pour que tous les ordinateurs/thérapeutes voient les mêmes données en temps réel, connectez un projet <strong>Firebase</strong> gratuit.</p>
-      <ol style="line-height:1.8; color:var(--muted); font-size:13px">
-        <li>Créez un projet sur <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
-        <li>Activez <strong>Firestore Database</strong> (mode production ou test)</li>
-        <li>Dans « Paramètres du projet » → Applications → ajoutez une app web et copiez la config</li>
-        <li>Collez-la ci-dessous et cliquez Connecter</li>
-      </ol>
-      <label class="sub">Configuration Firebase (objet JS/JSON)</label>
-      <textarea id="firebaseConfig" style="width:100%; height:180px; font-family:monospace; font-size:12px; padding:12px; border:1px solid var(--border); border-radius:8px; margin-top:6px" placeholder='{
-  "apiKey": "...",
-  "authDomain": "...",
-  "projectId": "...",
-  "storageBucket": "...",
-  "messagingSenderId": "...",
-  "appId": "..."
-}'></textarea>
-      <div style="margin-top:12px; display:flex; gap:10px">
-        <button class="btn-primary" onclick="connectFirebase()">🔗 Connecter Firebase</button>
-        <button class="btn-ghost" onclick="disconnectFirebase()">Déconnecter</button>
-      </div>
+      <p>La synchronisation <strong>Firebase</strong> est activée automatiquement à l'ouverture de l'application. Toutes les thérapeutes voient les mêmes données en temps réel.</p>
+      <p class="sub" id="firebaseStatusText" style="margin-top:8px">État : en attente de connexion…</p>
       <hr style="border:none; border-top:1px solid var(--border); margin:24px 0" />
       <h3 style="font-size:14px">💾 Sauvegarde / Restauration</h3>
       <p class="sub">Téléchargez une sauvegarde JSON complète ou restaurez depuis un fichier.</p>
@@ -482,6 +464,17 @@ const INITIAL_STOCKS = {
   'MBDPRO':         { 'tenue-s':0,  'tenue-m':0,  'tenue-l':0,  'tenue-xl':0,  'burn':0,  'sos':0,  'detox':0, 'skin':0,  'livre':0 },
 };
 const DEFAULT_SEUIL = 3;
+
+// Config Firebase embarquée — connexion automatique au chargement
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDQvJmLOp0gzJ6PXgleyxcqsXPfM6gry7c",
+  authDomain: "gestion-des-stocks-d708c.firebaseapp.com",
+  projectId: "gestion-des-stocks-d708c",
+  storageBucket: "gestion-des-stocks-d708c.firebasestorage.app",
+  messagingSenderId: "997864149189",
+  appId: "1:997864149189:web:2dccce11f2e92d900120ac",
+  measurementId: "G-3RYKDXDLP6"
+};
 
 // ============================================================
 // STATE
@@ -574,32 +567,15 @@ async function initFirebase(config) {
   updateSyncStatus(true);
 }
 
-window.connectFirebase = async function() {
-  const txt = document.getElementById('firebaseConfig').value.trim();
-  if (!txt) { toast('Collez la configuration Firebase'); return; }
-  let config;
-  try {
-    // Accept JS object or JSON
-    config = txt.startsWith('{') ? eval('(' + txt + ')') : JSON.parse(txt);
-  } catch(e) { toast('Config invalide'); return; }
-  try {
-    await initFirebase(config);
-    localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(config));
-    document.getElementById('settingsModal').classList.remove('show');
-    toast('✅ Firebase connecté');
-  } catch(e) { toast('Erreur: ' + e.message); }
-};
-window.disconnectFirebase = function() {
-  localStorage.removeItem(LS_CONFIG_KEY);
-  state.firebase = null;
-  updateSyncStatus(false);
-  toast('Firebase déconnecté — mode local');
-};
 function updateSyncStatus(online) {
   const el = document.getElementById('syncStatus');
   el.innerHTML = online
     ? '<span class="status-dot online"></span>Synchronisé'
     : '<span class="status-dot offline"></span>Local';
+  const txt = document.getElementById('firebaseStatusText');
+  if (txt) txt.textContent = online
+    ? '✅ État : connecté et synchronisé en temps réel.'
+    : '⚠️ État : hors-ligne (mode local).';
 }
 
 // ============================================================
@@ -991,8 +967,6 @@ document.getElementById('productModal').addEventListener('click', (e) => {
 // ============================================================
 window.openSettings = function() {
   document.getElementById('settingsModal').classList.add('show');
-  const saved = localStorage.getItem(LS_CONFIG_KEY);
-  if (saved) document.getElementById('firebaseConfig').value = saved;
 };
 document.getElementById('settingsModal').addEventListener('click', (e) => {
   if (e.target.id === 'settingsModal') e.target.classList.remove('show');
@@ -1130,11 +1104,11 @@ function toast(msg) {
 // ============================================================
 loadLocal();
 render();
-// Auto-reconnect Firebase if config saved
-const savedConfig = localStorage.getItem(LS_CONFIG_KEY);
-if (savedConfig) {
-  try { initFirebase(JSON.parse(savedConfig)); } catch(e) { console.error(e); }
-}
+// Connexion Firebase automatique avec la config embarquée
+initFirebase(FIREBASE_CONFIG).catch(e => {
+  console.error('Firebase auto-connect failed', e);
+  toast('⚠️ Firebase: ' + e.message);
+});
 </script>
 </body>
 </html>
