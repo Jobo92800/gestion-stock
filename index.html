@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gestion des stocks — MB</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; }
+  select, input[type=text], input[type=number], input[type=date] {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+    outline: none;
+    transition: border .15s;
+  }
+  select:focus, input:focus { border-color: var(--primary); }
+  button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .spacer { flex: 1; }
+
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--muted);
+    margin: 24px 0 10px;
+    font-weight: 600;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .product-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all .15s;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary);
+  }
+  .product-card .name { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+  .product-card .stock-big {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 8px 0 4px;
+  }
+  .product-card .stock-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .product-card.alert { border-color: var(--danger); background: #fef2f2; }
+  .product-card.alert .stock-big { color: var(--danger); }
+  .product-card.warn { border-color: var(--warning); background: #fffbeb; }
+  .product-card.warn .stock-big { color: var(--warning); }
+  .badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge.alert { background: var(--danger); color: white; }
+  .badge.warn { background: var(--warning); color: white; }
+
+  /* Modal */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(17,24,39,.5);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 200;
+    padding: 40px 20px;
+    overflow-y: auto;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 14px;
+    max-width: 780px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; }
+  .modal-body { padding: 20px 24px; max-height: 65vh; overflow-y: auto; }
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--muted);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr auto;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: end;
+  }
+  .form-row label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
+  .form-row input, .form-row select { width: 100%; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; background: #fafbfc; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #fafbfc; }
+  .empty { text-align: center; color: var(--muted); padding: 30px; font-style: italic; }
+  .sub-tabs { display: flex; gap: 2px; background: var(--bg); padding: 4px; border-radius: 8px; margin-bottom: 16px; width: fit-content; }
+  .sub-tab { background: transparent; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); }
+  .sub-tab.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.online { background: var(--success); }
+  .status-dot.offline { background: var(--warning); }
+
+  .mesojet-category {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .mesojet-category h3 {
+    margin: 0;
+    padding: 14px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--primary);
+  }
+  .mesojet-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .mesojet-row:last-child { border-bottom: none; }
+  .mesojet-row .name { font-weight: 500; }
+  .mesojet-row .stock-val { font-size: 20px; font-weight: 700; }
+  .mesojet-row .stock-val.alert { color: var(--danger); }
+  .mesojet-row .stock-val.warn { color: var(--warning); }
+  .mesojet-row input[type=number] { width: 80px; }
+
+  @media (max-width: 700px) {
+    .form-row { grid-template-columns: 1fr 1fr; }
+    .mesojet-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+    main { padding: 14px; }
+    header { padding: 12px 16px; }
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2430;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    z-index: 500;
+    animation: slideUp .2s ease-out;
+  }
+  @keyframes slideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏥 Gestion des stocks</h1>
+    <div class="sub">MB — Centres esthétiques</div>
+  </div>
+  <select id="centerSelect"></select>
+  <input type="text" id="searchInput" placeholder="🔍 Rechercher client, thérapeute…" style="min-width:240px" />
+  <div class="spacer"></div>
+  <span id="syncStatus" class="sub"><span class="status-dot offline"></span>Local</span>
+  <button class="btn-ghost btn-sm" onclick="exportExcel()">📊 Excel</button>
+  <button class="btn-ghost btn-sm" onclick="exportPDF()">📄 PDF</button>
+  <button class="btn-ghost btn-sm" onclick="openSettings()">⚙️</button>
+</header>
+
+<main>
+  <div class="tabs" id="mainTabs">
+    <button class="tab active" data-tab="stock">📦 Stock</button>
+    <button class="tab" data-tab="mesojet">💉 Mésojet</button>
+    <button class="tab" data-tab="history">📋 Historique</button>
+  </div>
+
+  <!-- STOCK TAB -->
+  <div id="tab-stock">
+    <div class="section-title">Tenues</div>
+    <div class="grid" id="gridTenues"></div>
+    <div class="section-title">Produits</div>
+    <div class="grid" id="gridProduits"></div>
+  </div>
+
+  <!-- MESOJET TAB -->
+  <div id="tab-mesojet" style="display:none">
+    <div id="mesojetContainer"></div>
+    <div id="mesojetUnavailable" style="display:none; text-align:center; padding:60px; color:var(--muted)">
+      <h2>Mésojet non disponible pour ce centre</h2>
+      <p>Le stock Mésojet est géré uniquement pour <strong>Le Crès</strong> et <strong>Sérignan</strong>.</p>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" style="display:none">
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-histtab="sorties">Sorties</button>
+      <button class="sub-tab" data-histtab="reappros">Réapprovisionnements</button>
+    </div>
+    <div id="historyTable" style="background:var(--card); border-radius:12px; border:1px solid var(--border); overflow:hidden;"></div>
+  </div>
+</main>
+
+<!-- PRODUCT MODAL -->
+<div class="modal-bg" id="productModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modalTitle">Produit</h2>
+        <div class="sub" id="modalSubtitle"></div>
+      </div>
+      <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-modaltab="sortie">➖ Sortie</button>
+        <button class="sub-tab" data-modaltab="reappro">➕ Réappro</button>
+        <button class="sub-tab" data-modaltab="config">⚙️ Config</button>
+      </div>
+
+      <div id="modal-sortie">
+        <form id="sortieForm" class="form-row">
+          <div><label>Nom client</label><input type="text" name="client" required /></div>
+          <div><label>Date</label><input type="date" name="date" required /></div>
+          <div><label>Quantité</label><input type="number" name="quantite" min="1" value="1" required /></div>
+          <div><label>Thérapeute</label><input type="text" name="therapeute" required /></div>
+          <button type="submit" class="btn-primary">Enregistrer</button>
+        </form>
+        <div id="sortiesList"></div>
+      </div>
+
+      <div id="modal-reappro" style="display:none">
+        <form id="reapproForm" class="form-row" style="grid-template-columns:1fr 1fr 1.5fr auto">
+          <div><label>Date</label><input type="date" name="date" required /></div>
+          <div><label>Quantité reçue</label><input type="number" name="quantite" min="1" value="1" required /></div>
+          <div><label>Thérapeute</label><input type="text" name="therapeute" required /></div>
+          <button type="submit" class="btn-success">Ajouter</button>
+        </form>
+        <div id="reapprosList"></div>
+      </div>
+
+      <div id="modal-config" style="display:none">
+        <div class="form-row" style="grid-template-columns:1fr 1fr auto">
+          <div><label>Stock initial</label><input type="number" id="cfgInitial" min="0" /></div>
+          <div><label>Seuil alerte stock bas</label><input type="number" id="cfgSeuil" min="0" /></div>
+          <button class="btn-primary" onclick="saveProductConfig()">Enregistrer</button>
+        </div>
+        <p class="sub" style="margin-top:16px">Le stock restant = stock initial + réapprovisionnements − sorties. Modifier le stock initial recalcule tout automatiquement.</p>
+        <hr style="border:none; border-top:1px solid var(--border); margin:20px 0" />
+        <button class="btn-danger btn-sm" onclick="resetProduct()">🗑️ Réinitialiser ce produit (supprimer toutes les sorties et réappros)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙️ Paramètres — Synchronisation Firebase</h2>
+      <button class="close-btn" onclick="document.getElementById('settingsModal').classList.remove('show')">×</button>
+    </div>
+    <div class="modal-body">
+      <p>Pour que tous les ordinateurs/thérapeutes voient les mêmes données en temps réel, connectez un projet <strong>Firebase</strong> gratuit.</p>
+      <ol style="line-height:1.8; color:var(--muted); font-size:13px">
+        <li>Créez un projet sur <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
+        <li>Activez <strong>Firestore Database</strong> (mode production ou test)</li>
+        <li>Dans « Paramètres du projet » → Applications → ajoutez une app web et copiez la config</li>
+        <li>Collez-la ci-dessous et cliquez Connecter</li>
+      </ol>
+      <label class="sub">Configuration Firebase (objet JS/JSON)</label>
+      <textarea id="firebaseConfig" style="width:100%; height:180px; font-family:monospace; font-size:12px; padding:12px; border:1px solid var(--border); border-radius:8px; margin-top:6px" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+      <div style="margin-top:12px; display:flex; gap:10px">
+        <button class="btn-primary" onclick="connectFirebase()">🔗 Connecter Firebase</button>
+        <button class="btn-ghost" onclick="disconnectFirebase()">Déconnecter</button>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:24px 0" />
+      <h3 style="font-size:14px">💾 Sauvegarde / Restauration</h3>
+      <p class="sub">Téléchargez une sauvegarde JSON complète ou restaurez depuis un fichier.</p>
+      <div style="display:flex; gap:10px">
+        <button class="btn-ghost btn-sm" onclick="backupJSON()">⬇️ Télécharger backup JSON</button>
+        <label class="btn-ghost btn-sm" style="cursor:pointer">
+          ⬆️ Restaurer depuis JSON
+          <input type="file" accept=".json" onchange="restoreJSON(event)" style="display:none" />
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ============================================================
+// DATA MODEL
+// ============================================================
+const CENTERS = ['LE GRAU DU ROI', 'LE CRES', 'CABESTANY', 'SERIGNAN', 'AVIGNON', 'MBDPRO'];
+const MESOJET_CENTERS = ['LE CRES', 'SERIGNAN'];
+
+const TENUES = [
+  { id: 'tenue-s',  name: 'Tenue Taille S' },
+  { id: 'tenue-m',  name: 'Tenue Taille M' },
+  { id: 'tenue-l',  name: 'Tenue Taille L' },
+  { id: 'tenue-xl', name: 'Tenue Taille XL' },
+];
+const PRODUITS = [
+  { id: 'burn',  name: 'BURN' },
+  { id: 'sos',   name: 'SOS' },
+  { id: 'detox', name: 'DETOX' },
+  { id: 'skin',  name: 'SKIN' },
+  { id: 'livre', name: 'LIVRE' },
+];
+
+const MESOJET_STRUCTURE = [
+  { cat: 'PEELINGS', items: [
+    { id: 'peel-rc1', name: 'Renewal Complex 1 - Glycolic 5%' },
+    { id: 'peel-rc2', name: 'Renewal Complex 2 - Glycolic acid 10%' },
+    { id: 'peel-rc4', name: 'Renewal Complex 4 - Mandélic' },
+  ]},
+  { cat: 'INFUSIONS', items: [
+    { id: 'inf-aa1',       name: 'AA1' },
+    { id: 'inf-aa3',       name: 'AA3' },
+    { id: 'inf-argir',     name: 'ARGIR' },
+    { id: 'inf-whitening', name: 'WHITENING' },
+    { id: 'inf-sensiskin', name: 'SENSISKIN' },
+  ]},
+  { cat: 'BOOSTERS', items: [
+    { id: 'boost-c',     name: 'Booster C' },
+    { id: 'boost-b5',    name: 'Booster B5' },
+    { id: 'boost-ha',    name: 'Booster HA' },
+    { id: 'boost-ae',    name: 'Booster AE' },
+    { id: 'boost-ready', name: 'READY MEDICAL' },
+  ]},
+  { cat: 'AUTRE', items: [
+    { id: 'aut-jetdetox', name: 'JET DETOX' },
+    { id: 'aut-precious', name: 'PRECIOUS WAVES' },
+    { id: 'aut-gel',      name: 'GEL CONDUCTEUR PLAQUE' },
+    { id: 'aut-longlife', name: 'LONG LIFE' },
+    { id: 'aut-skin',     name: 'SKIN PERFECTOR / Crème visage' },
+  ]},
+];
+
+// Stocks initiaux extraits de l'Excel original
+const INITIAL_STOCKS = {
+  'LE GRAU DU ROI': { 'tenue-s':13, 'tenue-m':19, 'tenue-l':16, 'tenue-xl':9,  'burn':0,  'sos':68, 'detox':0, 'skin':33, 'livre':7 },
+  'LE CRES':        { 'tenue-s':14, 'tenue-m':18, 'tenue-l':15, 'tenue-xl':17, 'burn':39, 'sos':39, 'detox':0, 'skin':0,  'livre':101 },
+  'CABESTANY':      { 'tenue-s':11, 'tenue-m':5,  'tenue-l':0,  'tenue-xl':6,  'burn':0,  'sos':6,  'detox':0, 'skin':17, 'livre':28 },
+  'SERIGNAN':       { 'tenue-s':8,  'tenue-m':7,  'tenue-l':11, 'tenue-xl':18, 'burn':3,  'sos':0,  'detox':0, 'skin':22, 'livre':82 },
+  'AVIGNON':        { 'tenue-s':8,  'tenue-m':8,  'tenue-l':8,  'tenue-xl':0,  'burn':0,  'sos':0,  'detox':0, 'skin':0,  'livre':30 },
+  'MBDPRO':         { 'tenue-s':0,  'tenue-m':0,  'tenue-l':0,  'tenue-xl':0,  'burn':0,  'sos':0,  'detox':0, 'skin':0,  'livre':0 },
+};
+const DEFAULT_SEUIL = 3;
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  currentCenter: CENTERS[0],
+  currentTab: 'stock',
+  currentHistTab: 'sorties',
+  currentProduct: null, // { id, name, type: 'stock' | 'mesojet' }
+  data: {}, // { center: { products: { id: { stockInitial, seuil, sorties: [], reappros: [] } }, mesojet: { id: { stock, seuil, lastUpdate } } } }
+  search: '',
+  firebase: null,
+};
+
+// ============================================================
+// STORAGE (Firebase or localStorage)
+// ============================================================
+const LS_KEY = 'mb-stocks-v1';
+const LS_CONFIG_KEY = 'mb-firebase-config';
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      try { state.data = JSON.parse(raw); } catch(e) { state.data = {}; }
+    }
+  } catch(e) { /* localStorage indisponible (data: URL, privé, etc.) */ }
+  initializeMissingData();
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state.data)); } catch(e) {}
+}
+function initializeMissingData() {
+  for (const c of CENTERS) {
+    if (!state.data[c]) state.data[c] = { products: {}, mesojet: {} };
+    if (!state.data[c].products) state.data[c].products = {};
+    if (!state.data[c].mesojet) state.data[c].mesojet = {};
+    for (const p of [...TENUES, ...PRODUITS]) {
+      if (!state.data[c].products[p.id]) {
+        state.data[c].products[p.id] = {
+          stockInitial: INITIAL_STOCKS[c]?.[p.id] ?? 0,
+          seuil: DEFAULT_SEUIL,
+          sorties: [],
+          reappros: [],
+        };
+      }
+    }
+    if (MESOJET_CENTERS.includes(c)) {
+      for (const g of MESOJET_STRUCTURE) for (const it of g.items) {
+        if (!state.data[c].mesojet[it.id]) {
+          state.data[c].mesojet[it.id] = { stock: 0, seuil: 1, lastUpdate: null };
+        }
+      }
+    }
+  }
+}
+
+async function saveData() {
+  saveLocal();
+  if (state.firebase) {
+    try {
+      const { doc, setDoc } = state.firebase.fs;
+      await setDoc(doc(state.firebase.db, 'gestionStocks', 'main'), state.data);
+    } catch(e) { console.error('Firebase save error', e); toast('⚠️ Erreur Firebase: ' + e.message); }
+  }
+}
+
+// ============================================================
+// FIREBASE
+// ============================================================
+async function initFirebase(config) {
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+  const fs = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const app = initializeApp(config);
+  const db = fs.getFirestore(app);
+  state.firebase = { app, db, fs };
+  // Subscribe to realtime updates
+  const ref = fs.doc(db, 'gestionStocks', 'main');
+  fs.onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      state.data = snap.data();
+      initializeMissingData();
+      saveLocal();
+      render();
+    } else {
+      // First time: push current local data
+      fs.setDoc(ref, state.data);
+    }
+  }, (err) => { console.error(err); toast('⚠️ Firebase: ' + err.message); });
+  updateSyncStatus(true);
+}
+
+window.connectFirebase = async function() {
+  const txt = document.getElementById('firebaseConfig').value.trim();
+  if (!txt) { toast('Collez la configuration Firebase'); return; }
+  let config;
+  try {
+    // Accept JS object or JSON
+    config = txt.startsWith('{') ? eval('(' + txt + ')') : JSON.parse(txt);
+  } catch(e) { toast('Config invalide'); return; }
+  try {
+    await initFirebase(config);
+    localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(config));
+    document.getElementById('settingsModal').classList.remove('show');
+    toast('✅ Firebase connecté');
+  } catch(e) { toast('Erreur: ' + e.message); }
+};
+window.disconnectFirebase = function() {
+  localStorage.removeItem(LS_CONFIG_KEY);
+  state.firebase = null;
+  updateSyncStatus(false);
+  toast('Firebase déconnecté — mode local');
+};
+function updateSyncStatus(online) {
+  const el = document.getElementById('syncStatus');
+  el.innerHTML = online
+    ? '<span class="status-dot online"></span>Synchronisé'
+    : '<span class="status-dot offline"></span>Local';
+}
+
+// ============================================================
+// STOCK COMPUTATION
+// ============================================================
+function getStock(center, productId) {
+  const p = state.data[center]?.products?.[productId];
+  if (!p) return 0;
+  const entries = p.reappros.reduce((s, r) => s + (+r.quantite || 0), 0);
+  const exits = p.sorties.reduce((s, r) => s + (+r.quantite || 0), 0);
+  return (p.stockInitial || 0) + entries - exits;
+}
+function stockLevel(stock, seuil) {
+  if (stock <= 0) return 'alert';
+  if (stock <= seuil) return 'warn';
+  return 'ok';
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  renderCenterSelect();
+  renderStockTab();
+  renderMesojetTab();
+  renderHistoryTab();
+}
+
+function renderCenterSelect() {
+  const sel = document.getElementById('centerSelect');
+  if (!sel.options.length) {
+    sel.innerHTML = CENTERS.map(c => `<option value="${c}">${c}</option>`).join('');
+    sel.value = state.currentCenter;
+  }
+}
+
+function renderStockTab() {
+  const c = state.currentCenter;
+  document.getElementById('gridTenues').innerHTML = TENUES.map(p => cardHTML(c, p, 'stock')).join('');
+  document.getElementById('gridProduits').innerHTML = PRODUITS.map(p => cardHTML(c, p, 'stock')).join('');
+}
+
+function cardHTML(center, p, type) {
+  const stock = getStock(center, p.id);
+  const seuil = state.data[center].products[p.id].seuil;
+  const level = stockLevel(stock, seuil);
+  const cls = level === 'alert' ? 'alert' : (level === 'warn' ? 'warn' : '');
+  const badge = level === 'alert' ? '<span class="badge alert">Rupture</span>'
+              : level === 'warn' ? '<span class="badge warn">Bas</span>' : '';
+  return `
+    <div class="product-card ${cls}" onclick="openProduct('${p.id}','${type}')">
+      ${badge}
+      <div class="name">${p.name}</div>
+      <div class="stock-big">${stock}</div>
+      <div class="stock-label">en stock · seuil ${seuil}</div>
+    </div>`;
+}
+
+function renderMesojetTab() {
+  const c = state.currentCenter;
+  const container = document.getElementById('mesojetContainer');
+  const unavailable = document.getElementById('mesojetUnavailable');
+  if (!MESOJET_CENTERS.includes(c)) {
+    container.style.display = 'none';
+    unavailable.style.display = 'block';
+    return;
+  }
+  container.style.display = 'block';
+  unavailable.style.display = 'none';
+  container.innerHTML = MESOJET_STRUCTURE.map(g => `
+    <div class="mesojet-category">
+      <h3>${g.cat}</h3>
+      ${g.items.map(it => {
+        const d = state.data[c].mesojet[it.id] || { stock: 0, seuil: 1, lastUpdate: null };
+        const lvl = stockLevel(d.stock, d.seuil);
+        const cls = lvl === 'alert' ? 'alert' : (lvl === 'warn' ? 'warn' : '');
+        return `
+          <div class="mesojet-row">
+            <div class="name">${it.name}</div>
+            <div class="stock-val ${cls}">${d.stock}</div>
+            <div>
+              <label class="sub" style="font-size:10px">Nouveau stock</label>
+              <input type="number" step="0.25" min="0" value="${d.stock}" onchange="updateMesojet('${it.id}', this.value)" />
+            </div>
+            <div>
+              <label class="sub" style="font-size:10px">Seuil</label>
+              <input type="number" min="0" value="${d.seuil}" onchange="updateMesojetSeuil('${it.id}', this.value)" />
+            </div>
+            <div class="sub" style="font-size:11px">${d.lastUpdate ? new Date(d.lastUpdate).toLocaleDateString('fr-FR') : '—'}</div>
+          </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+window.updateMesojet = function(id, val) {
+  const c = state.currentCenter;
+  state.data[c].mesojet[id].stock = parseFloat(val) || 0;
+  state.data[c].mesojet[id].lastUpdate = Date.now();
+  saveData();
+  renderMesojetTab();
+  toast('✅ Stock mis à jour');
+};
+window.updateMesojetSeuil = function(id, val) {
+  const c = state.currentCenter;
+  state.data[c].mesojet[id].seuil = parseFloat(val) || 0;
+  saveData();
+  renderMesojetTab();
+};
+
+function renderHistoryTab() {
+  const c = state.currentCenter;
+  const tbl = document.getElementById('historyTable');
+  const allProducts = [...TENUES, ...PRODUITS];
+  const search = state.search.toLowerCase();
+
+  if (state.currentHistTab === 'sorties') {
+    const rows = [];
+    for (const p of allProducts) {
+      for (const s of (state.data[c].products[p.id]?.sorties || [])) {
+        rows.push({ ...s, productName: p.name, productId: p.id });
+      }
+    }
+    rows.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    const filtered = search
+      ? rows.filter(r =>
+          (r.client||'').toLowerCase().includes(search) ||
+          (r.therapeute||'').toLowerCase().includes(search) ||
+          (r.productName||'').toLowerCase().includes(search))
+      : rows;
+    if (!filtered.length) { tbl.innerHTML = '<div class="empty">Aucune sortie enregistrée.</div>'; return; }
+    tbl.innerHTML = `<table>
+      <thead><tr><th>Date</th><th>Produit</th><th>Client</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
+      <tbody>${filtered.map(r => `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td>${r.productName}</td>
+          <td>${r.client||''}</td>
+          <td>${r.quantite}</td>
+          <td>${r.therapeute||''}</td>
+          <td><button class="btn-danger btn-sm" onclick="deleteSortie('${r.productId}','${r.id}')">×</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } else {
+    const rows = [];
+    for (const p of allProducts) {
+      for (const s of (state.data[c].products[p.id]?.reappros || [])) {
+        rows.push({ ...s, productName: p.name, productId: p.id });
+      }
+    }
+    rows.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    if (!rows.length) { tbl.innerHTML = '<div class="empty">Aucun réapprovisionnement.</div>'; return; }
+    tbl.innerHTML = `<table>
+      <thead><tr><th>Date</th><th>Produit</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${formatDate(r.date)}</td>
+          <td>${r.productName}</td>
+          <td>+${r.quantite}</td>
+          <td>${r.therapeute||''}</td>
+          <td><button class="btn-danger btn-sm" onclick="deleteReappro('${r.productId}','${r.id}')">×</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e) { return d; }
+}
+
+// ============================================================
+// PRODUCT MODAL
+// ============================================================
+window.openProduct = function(id, type) {
+  const p = [...TENUES, ...PRODUITS].find(x => x.id === id);
+  if (!p) return;
+  state.currentProduct = { ...p, type };
+  const c = state.currentCenter;
+  const prod = state.data[c].products[id];
+  const stock = getStock(c, id);
+  document.getElementById('modalTitle').textContent = p.name;
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  document.getElementById('cfgInitial').value = prod.stockInitial;
+  document.getElementById('cfgSeuil').value = prod.seuil;
+  // Today's date default
+  const today = new Date().toISOString().slice(0,10);
+  document.querySelector('#sortieForm [name=date]').value = today;
+  document.querySelector('#reapproForm [name=date]').value = today;
+  renderSortiesList();
+  renderReapprosList();
+  document.getElementById('productModal').classList.add('show');
+  // Reset tab
+  document.querySelectorAll('[data-modaltab]').forEach(b => b.classList.toggle('active', b.dataset.modaltab === 'sortie'));
+  document.getElementById('modal-sortie').style.display = '';
+  document.getElementById('modal-reappro').style.display = 'none';
+  document.getElementById('modal-config').style.display = 'none';
+};
+window.closeModal = function() {
+  document.getElementById('productModal').classList.remove('show');
+  state.currentProduct = null;
+};
+
+function renderSortiesList() {
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  const sorties = [...(state.data[c].products[p.id].sorties || [])].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const el = document.getElementById('sortiesList');
+  if (!sorties.length) { el.innerHTML = '<div class="empty">Aucune sortie pour ce produit.</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Date</th><th>Client</th><th>Qté</th><th>Thérapeute</th><th></th></tr></thead>
+    <tbody>${sorties.map(s => `
+      <tr>
+        <td>${formatDate(s.date)}</td>
+        <td>${s.client||''}</td>
+        <td>${s.quantite}</td>
+        <td>${s.therapeute||''}</td>
+        <td><button class="btn-danger btn-sm" onclick="deleteSortie('${p.id}','${s.id}')">×</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+function renderReapprosList() {
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  const reappros = [...(state.data[c].products[p.id].reappros || [])].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const el = document.getElementById('reapprosList');
+  if (!reappros.length) { el.innerHTML = '<div class="empty">Aucun réapprovisionnement.</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Date</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
+    <tbody>${reappros.map(r => `
+      <tr>
+        <td>${formatDate(r.date)}</td>
+        <td>+${r.quantite}</td>
+        <td>${r.therapeute||''}</td>
+        <td><button class="btn-danger btn-sm" onclick="deleteReappro('${p.id}','${r.id}')">×</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+window.deleteSortie = function(productId, sortieId) {
+  if (!confirm('Supprimer cette sortie ?')) return;
+  const c = state.currentCenter;
+  state.data[c].products[productId].sorties = state.data[c].products[productId].sorties.filter(s => s.id !== sortieId);
+  saveData();
+  render();
+  if (state.currentProduct && state.currentProduct.id === productId) {
+    renderSortiesList();
+    const stock = getStock(c, productId);
+    document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  }
+};
+window.deleteReappro = function(productId, reapproId) {
+  if (!confirm('Supprimer ce réapprovisionnement ?')) return;
+  const c = state.currentCenter;
+  state.data[c].products[productId].reappros = state.data[c].products[productId].reappros.filter(s => s.id !== reapproId);
+  saveData();
+  render();
+  if (state.currentProduct && state.currentProduct.id === productId) {
+    renderReapprosList();
+    const stock = getStock(c, productId);
+    document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  }
+};
+
+window.saveProductConfig = function() {
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  state.data[c].products[p.id].stockInitial = parseFloat(document.getElementById('cfgInitial').value) || 0;
+  state.data[c].products[p.id].seuil = parseFloat(document.getElementById('cfgSeuil').value) || 0;
+  saveData();
+  render();
+  const stock = getStock(c, p.id);
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  toast('✅ Configuration enregistrée');
+};
+window.resetProduct = function() {
+  if (!confirm('Supprimer TOUTES les sorties et réappros de ce produit ?')) return;
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  state.data[c].products[p.id].sorties = [];
+  state.data[c].products[p.id].reappros = [];
+  saveData();
+  render();
+  renderSortiesList();
+  renderReapprosList();
+  toast('✅ Produit réinitialisé');
+};
+
+// ============================================================
+// FORMS
+// ============================================================
+document.getElementById('sortieForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const entry = {
+    id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    client: fd.get('client'),
+    date: fd.get('date'),
+    quantite: parseFloat(fd.get('quantite')) || 0,
+    therapeute: fd.get('therapeute'),
+  };
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  state.data[c].products[p.id].sorties.push(entry);
+  saveData();
+  render();
+  renderSortiesList();
+  const stock = getStock(c, p.id);
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  // Keep therapist name, reset client
+  e.target.client.value = '';
+  e.target.quantite.value = 1;
+  e.target.client.focus();
+  toast('✅ Sortie enregistrée');
+});
+
+document.getElementById('reapproForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const entry = {
+    id: 'r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    date: fd.get('date'),
+    quantite: parseFloat(fd.get('quantite')) || 0,
+    therapeute: fd.get('therapeute'),
+  };
+  const c = state.currentCenter;
+  const p = state.currentProduct;
+  state.data[c].products[p.id].reappros.push(entry);
+  saveData();
+  render();
+  renderReapprosList();
+  const stock = getStock(c, p.id);
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  e.target.quantite.value = 1;
+  toast('✅ Réappro ajouté');
+});
+
+// ============================================================
+// TABS / NAV
+// ============================================================
+document.getElementById('centerSelect').addEventListener('change', (e) => {
+  state.currentCenter = e.target.value;
+  render();
+});
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  state.search = e.target.value;
+  if (state.currentTab === 'history') renderHistoryTab();
+});
+
+document.querySelectorAll('#mainTabs .tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mainTabs .tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.currentTab = btn.dataset.tab;
+    document.getElementById('tab-stock').style.display = state.currentTab === 'stock' ? '' : 'none';
+    document.getElementById('tab-mesojet').style.display = state.currentTab === 'mesojet' ? '' : 'none';
+    document.getElementById('tab-history').style.display = state.currentTab === 'history' ? '' : 'none';
+    render();
+  });
+});
+
+document.querySelectorAll('[data-histtab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-histtab]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.currentHistTab = btn.dataset.histtab;
+    renderHistoryTab();
+  });
+});
+
+document.querySelectorAll('[data-modaltab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-modaltab]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.modaltab;
+    document.getElementById('modal-sortie').style.display  = t === 'sortie'  ? '' : 'none';
+    document.getElementById('modal-reappro').style.display = t === 'reappro' ? '' : 'none';
+    document.getElementById('modal-config').style.display  = t === 'config'  ? '' : 'none';
+  });
+});
+
+// Click outside modal
+document.getElementById('productModal').addEventListener('click', (e) => {
+  if (e.target.id === 'productModal') closeModal();
+});
+
+// ============================================================
+// SETTINGS
+// ============================================================
+window.openSettings = function() {
+  document.getElementById('settingsModal').classList.add('show');
+  const saved = localStorage.getItem(LS_CONFIG_KEY);
+  if (saved) document.getElementById('firebaseConfig').value = saved;
+};
+document.getElementById('settingsModal').addEventListener('click', (e) => {
+  if (e.target.id === 'settingsModal') e.target.classList.remove('show');
+});
+
+// ============================================================
+// EXPORT
+// ============================================================
+window.exportExcel = function() {
+  const c = state.currentCenter;
+  const wb = XLSX.utils.book_new();
+  // Summary sheet
+  const summary = [['Produit', 'Stock initial', 'Réappros', 'Sorties', 'Stock restant', 'Seuil']];
+  for (const p of [...TENUES, ...PRODUITS]) {
+    const prod = state.data[c].products[p.id];
+    const rea = prod.reappros.reduce((s,r) => s+(+r.quantite||0), 0);
+    const sor = prod.sorties.reduce((s,r) => s+(+r.quantite||0), 0);
+    summary.push([p.name, prod.stockInitial, rea, sor, prod.stockInitial+rea-sor, prod.seuil]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Récap');
+  // Sorties sheet
+  const sortiesData = [['Produit', 'Date', 'Client', 'Quantité', 'Thérapeute']];
+  for (const p of [...TENUES, ...PRODUITS]) {
+    for (const s of state.data[c].products[p.id].sorties) {
+      sortiesData.push([p.name, s.date, s.client, s.quantite, s.therapeute]);
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sortiesData), 'Sorties');
+  // Réappros
+  const reData = [['Produit', 'Date', 'Quantité', 'Thérapeute']];
+  for (const p of [...TENUES, ...PRODUITS]) {
+    for (const r of state.data[c].products[p.id].reappros) {
+      reData.push([p.name, r.date, r.quantite, r.therapeute]);
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(reData), 'Réappros');
+  // Mesojet if applicable
+  if (MESOJET_CENTERS.includes(c)) {
+    const mesoData = [['Catégorie', 'Produit', 'Stock', 'Seuil', 'Dernière MAJ']];
+    for (const g of MESOJET_STRUCTURE) for (const it of g.items) {
+      const d = state.data[c].mesojet[it.id];
+      mesoData.push([g.cat, it.name, d.stock, d.seuil, d.lastUpdate ? new Date(d.lastUpdate).toLocaleDateString('fr-FR') : '']);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mesoData), 'Mésojet');
+  }
+  XLSX.writeFile(wb, `Stocks_${c.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('📊 Export Excel généré');
+};
+
+window.exportPDF = function() {
+  const c = state.currentCenter;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(`Gestion des stocks — ${c}`, 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, 14, 25);
+
+  const body = [];
+  for (const p of [...TENUES, ...PRODUITS]) {
+    const prod = state.data[c].products[p.id];
+    const rea = prod.reappros.reduce((s,r) => s+(+r.quantite||0), 0);
+    const sor = prod.sorties.reduce((s,r) => s+(+r.quantite||0), 0);
+    const stock = prod.stockInitial + rea - sor;
+    body.push([p.name, prod.stockInitial, '+'+rea, '-'+sor, stock, prod.seuil]);
+  }
+  doc.autoTable({
+    head: [['Produit', 'Initial', 'Réappros', 'Sorties', 'Restant', 'Seuil']],
+    body,
+    startY: 32,
+    headStyles: { fillColor: [99, 102, 241] },
+  });
+
+  if (MESOJET_CENTERS.includes(c)) {
+    doc.addPage();
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text(`Mésojet — ${c}`, 14, 18);
+    const mesoBody = [];
+    for (const g of MESOJET_STRUCTURE) for (const it of g.items) {
+      const d = state.data[c].mesojet[it.id];
+      mesoBody.push([g.cat, it.name, d.stock, d.seuil]);
+    }
+    doc.autoTable({
+      head: [['Catégorie', 'Produit', 'Stock', 'Seuil']],
+      body: mesoBody,
+      startY: 25,
+      headStyles: { fillColor: [99, 102, 241] },
+    });
+  }
+  doc.save(`Stocks_${c.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('📄 Export PDF généré');
+};
+
+window.backupJSON = function() {
+  const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `backup-stocks-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+};
+window.restoreJSON = function(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      state.data = JSON.parse(reader.result);
+      initializeMissingData();
+      saveData();
+      render();
+      toast('✅ Données restaurées');
+    } catch(err) { toast('Fichier invalide'); }
+  };
+  reader.readAsText(f);
+};
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+loadLocal();
+render();
+// Auto-reconnect Firebase if config saved
+const savedConfig = localStorage.getItem(LS_CONFIG_KEY);
+if (savedConfig) {
+  try { initFirebase(JSON.parse(savedConfig)); } catch(e) { console.error(e); }
+}
+</script>
+</body>
+</html>
