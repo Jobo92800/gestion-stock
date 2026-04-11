@@ -166,6 +166,33 @@
   .product-card.alert .stock-big { color: var(--danger); }
   .product-card.warn { border-color: var(--warning); background: #fffbeb; }
   .product-card.warn .stock-big { color: var(--warning); }
+  .product-card .qty-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: flex-start;
+  }
+  .product-card .qty-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform .08s ease, box-shadow .15s ease;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .product-card .qty-btn:hover { box-shadow: 0 4px 10px rgba(0,0,0,.15); }
+  .product-card .qty-btn:active { transform: scale(.92); }
+  .product-card .qty-btn.minus { background: var(--danger); }
+  .product-card .qty-btn.plus  { background: var(--success, #16a34a); }
+  .product-card .qty-btn:disabled { opacity: .4; cursor: not-allowed; }
   .badge {
     position: absolute;
     top: 10px;
@@ -311,7 +338,7 @@
     <h1>🏥 Gestion des stocks</h1>
     <div class="sub">MB — Centres esthétiques</div>
   </div>
-  <input type="text" id="searchInput" placeholder="🔍 Rechercher client, thérapeute…" style="min-width:240px" />
+  <input type="text" id="searchInput" placeholder="🔍 Rechercher un produit…" style="min-width:240px" />
   <div class="spacer"></div>
   <span id="syncStatus" class="sub"><span class="status-dot offline"></span>Local</span>
   <button class="btn-ghost btn-sm" onclick="exportExcel()">📊 Excel</button>
@@ -384,21 +411,16 @@
       </div>
 
       <div id="modal-sortie">
-        <form id="sortieForm" class="form-row">
-          <div><label>Nom client</label><input type="text" name="client" required /></div>
-          <div><label>Date</label><input type="date" name="date" required /></div>
-          <div><label>Quantité</label><input type="number" name="quantite" min="1" value="1" required /></div>
-          <div><label>Thérapeute</label><input type="text" name="therapeute" required /></div>
-          <button type="submit" class="btn-primary">Enregistrer</button>
+        <form id="sortieForm" class="form-row" style="grid-template-columns:1fr auto">
+          <div><label>Quantité à retirer</label><input type="number" name="quantite" min="1" value="1" required /></div>
+          <button type="submit" class="btn-primary">Retirer</button>
         </form>
         <div id="sortiesList"></div>
       </div>
 
       <div id="modal-reappro" style="display:none">
-        <form id="reapproForm" class="form-row" style="grid-template-columns:1fr 1fr 1.5fr auto">
-          <div><label>Date</label><input type="date" name="date" required /></div>
+        <form id="reapproForm" class="form-row" style="grid-template-columns:1fr auto">
           <div><label>Quantité reçue</label><input type="number" name="quantite" min="1" value="1" required /></div>
-          <div><label>Thérapeute</label><input type="text" name="therapeute" required /></div>
           <button type="submit" class="btn-success">Ajouter</button>
         </form>
         <div id="reapprosList"></div>
@@ -759,14 +781,47 @@ function cardHTML(center, p, type) {
   const cls = level === 'alert' ? 'alert' : (level === 'warn' ? 'warn' : '');
   const badge = level === 'alert' ? '<span class="badge alert">Rupture</span>'
               : level === 'warn' ? '<span class="badge warn">Bas</span>' : '';
+  const disabledMinus = stock <= 0 ? 'disabled' : '';
   return `
     <div class="product-card ${cls}" onclick="openProduct('${p.id}','${type}')">
       ${badge}
       <div class="name">${p.name}</div>
       <div class="stock-big">${stock}</div>
       <div class="stock-label">en stock · seuil ${seuil}</div>
+      <div class="qty-actions" onclick="event.stopPropagation()">
+        <button type="button" class="qty-btn minus" ${disabledMinus} onclick="quickRemove('${p.id}')" title="Retirer 1">−</button>
+        <button type="button" class="qty-btn plus" onclick="quickAdd('${p.id}')" title="Ajouter 1">+</button>
+      </div>
     </div>`;
 }
+
+window.quickRemove = function(id) {
+  const c = state.currentCenter;
+  const prod = state.data[c]?.products?.[id];
+  if (!prod) return;
+  const current = getStock(c, id);
+  if (current <= 0) { toast('⚠️ Stock vide'); return; }
+  prod.sorties.push({
+    id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    date: new Date().toISOString(),
+    quantite: 1,
+  });
+  saveData();
+  render();
+};
+
+window.quickAdd = function(id) {
+  const c = state.currentCenter;
+  const prod = state.data[c]?.products?.[id];
+  if (!prod) return;
+  prod.reappros.push({
+    id: 'r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    date: new Date().toISOString(),
+    quantite: 1,
+  });
+  saveData();
+  render();
+};
 
 function renderMesojetTab() {
   const c = state.currentCenter;
@@ -834,21 +889,16 @@ function renderHistoryTab() {
     }
     rows.sort((a,b) => (b.date||'').localeCompare(a.date||''));
     const filtered = search
-      ? rows.filter(r =>
-          (r.client||'').toLowerCase().includes(search) ||
-          (r.therapeute||'').toLowerCase().includes(search) ||
-          (r.productName||'').toLowerCase().includes(search))
+      ? rows.filter(r => (r.productName||'').toLowerCase().includes(search))
       : rows;
     if (!filtered.length) { tbl.innerHTML = '<div class="empty">Aucune sortie enregistrée.</div>'; return; }
     tbl.innerHTML = `<table>
-      <thead><tr><th>Date</th><th>Produit</th><th>Client</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Produit</th><th>Quantité</th><th></th></tr></thead>
       <tbody>${filtered.map(r => `
         <tr>
-          <td>${formatDate(r.date)}</td>
+          <td>${formatDateTime(r.date)}</td>
           <td>${r.productName}</td>
-          <td>${r.client||''}</td>
-          <td>${r.quantite}</td>
-          <td>${r.therapeute||''}</td>
+          <td>−${r.quantite}</td>
           <td><button class="btn-danger btn-sm" onclick="deleteSortie('${r.productId}','${r.id}')">×</button></td>
         </tr>`).join('')}
       </tbody></table>`;
@@ -860,15 +910,17 @@ function renderHistoryTab() {
       }
     }
     rows.sort((a,b) => (b.date||'').localeCompare(a.date||''));
-    if (!rows.length) { tbl.innerHTML = '<div class="empty">Aucun réapprovisionnement.</div>'; return; }
+    const filtered = search
+      ? rows.filter(r => (r.productName||'').toLowerCase().includes(search))
+      : rows;
+    if (!filtered.length) { tbl.innerHTML = '<div class="empty">Aucun réapprovisionnement.</div>'; return; }
     tbl.innerHTML = `<table>
-      <thead><tr><th>Date</th><th>Produit</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
-      <tbody>${rows.map(r => `
+      <thead><tr><th>Date</th><th>Produit</th><th>Quantité</th><th></th></tr></thead>
+      <tbody>${filtered.map(r => `
         <tr>
-          <td>${formatDate(r.date)}</td>
+          <td>${formatDateTime(r.date)}</td>
           <td>${r.productName}</td>
           <td>+${r.quantite}</td>
-          <td>${r.therapeute||''}</td>
           <td><button class="btn-danger btn-sm" onclick="deleteReappro('${r.productId}','${r.id}')">×</button></td>
         </tr>`).join('')}
       </tbody></table>`;
@@ -878,6 +930,13 @@ function renderHistoryTab() {
 function formatDate(d) {
   if (!d) return '';
   try { return new Date(d).toLocaleDateString('fr-FR'); } catch(e) { return d; }
+}
+function formatDateTime(d) {
+  if (!d) return '';
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('fr-FR') + ' ' + dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+  } catch(e) { return d; }
 }
 
 // ============================================================
@@ -894,10 +953,8 @@ window.openProduct = function(id, type) {
   document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
   document.getElementById('cfgInitial').value = prod.stockInitial;
   document.getElementById('cfgSeuil').value = prod.seuil;
-  // Today's date default
-  const today = new Date().toISOString().slice(0,10);
-  document.querySelector('#sortieForm [name=date]').value = today;
-  document.querySelector('#reapproForm [name=date]').value = today;
+  document.querySelector('#sortieForm [name=quantite]').value = 1;
+  document.querySelector('#reapproForm [name=quantite]').value = 1;
   renderSortiesList();
   renderReapprosList();
   document.getElementById('productModal').classList.add('show');
@@ -919,13 +976,11 @@ function renderSortiesList() {
   const el = document.getElementById('sortiesList');
   if (!sorties.length) { el.innerHTML = '<div class="empty">Aucune sortie pour ce produit.</div>'; return; }
   el.innerHTML = `<table>
-    <thead><tr><th>Date</th><th>Client</th><th>Qté</th><th>Thérapeute</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Quantité</th><th></th></tr></thead>
     <tbody>${sorties.map(s => `
       <tr>
-        <td>${formatDate(s.date)}</td>
-        <td>${s.client||''}</td>
-        <td>${s.quantite}</td>
-        <td>${s.therapeute||''}</td>
+        <td>${formatDateTime(s.date)}</td>
+        <td>−${s.quantite}</td>
         <td><button class="btn-danger btn-sm" onclick="deleteSortie('${p.id}','${s.id}')">×</button></td>
       </tr>`).join('')}
     </tbody></table>`;
@@ -937,12 +992,11 @@ function renderReapprosList() {
   const el = document.getElementById('reapprosList');
   if (!reappros.length) { el.innerHTML = '<div class="empty">Aucun réapprovisionnement.</div>'; return; }
   el.innerHTML = `<table>
-    <thead><tr><th>Date</th><th>Quantité</th><th>Thérapeute</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Quantité</th><th></th></tr></thead>
     <tbody>${reappros.map(r => `
       <tr>
-        <td>${formatDate(r.date)}</td>
+        <td>${formatDateTime(r.date)}</td>
         <td>+${r.quantite}</td>
-        <td>${r.therapeute||''}</td>
         <td><button class="btn-danger btn-sm" onclick="deleteReappro('${p.id}','${r.id}')">×</button></td>
       </tr>`).join('')}
     </tbody></table>`;
@@ -1003,45 +1057,41 @@ window.resetProduct = function() {
 document.getElementById('sortieForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const entry = {
-    id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-    client: fd.get('client'),
-    date: fd.get('date'),
-    quantite: parseFloat(fd.get('quantite')) || 0,
-    therapeute: fd.get('therapeute'),
-  };
+  const qty = parseFloat(fd.get('quantite')) || 0;
+  if (qty <= 0) return;
   const c = state.currentCenter;
   const p = state.currentProduct;
-  state.data[c].products[p.id].sorties.push(entry);
+  const current = getStock(c, p.id);
+  if (qty > current) { toast('⚠️ Stock insuffisant'); return; }
+  state.data[c].products[p.id].sorties.push({
+    id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    date: new Date().toISOString(),
+    quantite: qty,
+  });
   saveData();
   render();
   renderSortiesList();
-  const stock = getStock(c, p.id);
-  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
-  // Keep therapist name, reset client
-  e.target.client.value = '';
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${getStock(c, p.id)}`;
   e.target.quantite.value = 1;
-  e.target.client.focus();
   toast('✅ Sortie enregistrée');
 });
 
 document.getElementById('reapproForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const entry = {
-    id: 'r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-    date: fd.get('date'),
-    quantite: parseFloat(fd.get('quantite')) || 0,
-    therapeute: fd.get('therapeute'),
-  };
+  const qty = parseFloat(fd.get('quantite')) || 0;
+  if (qty <= 0) return;
   const c = state.currentCenter;
   const p = state.currentProduct;
-  state.data[c].products[p.id].reappros.push(entry);
+  state.data[c].products[p.id].reappros.push({
+    id: 'r_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    date: new Date().toISOString(),
+    quantite: qty,
+  });
   saveData();
   render();
   renderReapprosList();
-  const stock = getStock(c, p.id);
-  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${stock}`;
+  document.getElementById('modalSubtitle').textContent = `${c} · Stock actuel : ${getStock(c, p.id)}`;
   e.target.quantite.value = 1;
   toast('✅ Réappro ajouté');
 });
@@ -1119,18 +1169,18 @@ window.exportExcel = function() {
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Récap');
   // Sorties sheet
-  const sortiesData = [['Produit', 'Date', 'Client', 'Quantité', 'Thérapeute']];
+  const sortiesData = [['Produit', 'Date', 'Quantité']];
   for (const p of allProductsForCenter(c)) {
     for (const s of state.data[c].products[p.id].sorties) {
-      sortiesData.push([p.name, s.date, s.client, s.quantite, s.therapeute]);
+      sortiesData.push([p.name, formatDateTime(s.date), s.quantite]);
     }
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sortiesData), 'Sorties');
   // Réappros
-  const reData = [['Produit', 'Date', 'Quantité', 'Thérapeute']];
+  const reData = [['Produit', 'Date', 'Quantité']];
   for (const p of allProductsForCenter(c)) {
     for (const r of state.data[c].products[p.id].reappros) {
-      reData.push([p.name, r.date, r.quantite, r.therapeute]);
+      reData.push([p.name, formatDateTime(r.date), r.quantite]);
     }
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(reData), 'Réappros');
